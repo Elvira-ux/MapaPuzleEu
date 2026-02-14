@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aula Kids - Puzzle Europa</title>
+    
+    <!-- Scripts Externs -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/topojson@3"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+
+        .country-target { transition: all 0.3s ease; }
+        
+        /* Efecte Glow Guia Visual */
+        @keyframes pulse-guide {
+            0% { filter: drop-shadow(0 0 2px #a3e635); fill: #f0fdf4; stroke: #a3e635; stroke-width: 1.5; }
+            50% { filter: drop-shadow(0 0 15px #a3e635); fill: #dcfce7; stroke: #4ade80; stroke-width: 2.5; }
+            100% { filter: drop-shadow(0 0 2px #a3e635); fill: #f0fdf4; stroke: #a3e635; stroke-width: 1.5; }
+        }
+        .guide-glow {
+            animation: pulse-guide 1.5s infinite;
+            z-index: 50;
+        }
+
+        /* Animació per al Diploma */
+        .certificate-appear {
+            animation: slideUp 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        @keyframes slideUp {
+            from { transform: translateY(100px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .diploma-font { font-family: 'Great Vibes', cursive; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const REGIONES_COLORS = {
+            "Escandinàvia": "#bae6fd",
+            "Bàltics": "#ddd6fe",
+            "Europa Occidental": "#fef08a",
+            "Europa Central": "#bbf7d0",
+            "Europa Oriental": "#fed7aa",
+            "Balcans": "#fecaca",
+            "Europa del Sud": "#f9a8d4",
+            "Caucas": "#cbd5e1"
+        };
+
+        const PAISES_FICHA = {
+            "Albania": { num: 1, display: "Albània", capital: "Tirana", iso: "al", region: "Balcans" },
+            "Germany": { num: 2, display: "Alemanya", capital: "Berlín", iso: "de", region: "Europa Central" },
+            "Andorra": { num: 3, display: "Andorra", capital: "Andorra la Vella", iso: "ad", region: "Europa del Sud" },
+            "Armenia": { num: 4, display: "Armènia", capital: "Erevan", iso: "am", region: "Caucas" },
+            "Austria": { num: 5, display: "Àustria", capital: "Viena", iso: "at", region: "Europa Central" },
+            "Azerbaijan": { num: 6, display: "Azerbaidjan", capital: "Bakú", iso: "az", region: "Caucas" },
+            "Belgium": { num: 7, display: "Bèlgica", capital: "Brussel·les", iso: "be", region: "Europa Occidental" },
+            "Belarus": { num: 8, display: "Bielorússia", capital: "Minsk", iso: "by", region: "Europa Oriental" },
+            "Bosnia and Herz.": { num: 9, display: "Bòsnia i Hercegovina", capital: "Sarajevo", iso: "ba", region: "Balcans" },
+            "Bulgaria": { num: 10, display: "Bulgària", capital: "Sofia", iso: "bg", region: "Balcans" },
+            "Croatia": { num: 11, display: "Croàcia", capital: "Zagreb", iso: "hr", region: "Balcans" },
+            "Denmark": { num: 12, display: "Dinamarca", capital: "Copenhaguen", iso: "dk", region: "Escandinàvia" },
+            "Slovakia": { num: 13, display: "Eslovàquia", capital: "Bratislava", iso: "sk", region: "Europa Central" },
+            "Slovenia": { num: 14, display: "Eslovènia", capital: "Ljubliana", iso: "si", region: "Europa Central" },
+            "Spain": { num: 15, display: "Espanya", capital: "Madrid", iso: "es", region: "Europa del Sud" },
+            "Estonia": { num: 16, display: "Estònia", capital: "Tallinn", iso: "ee", region: "Bàltics" },
+            "Finland": { num: 17, display: "Finlàndia", capital: "Hèlsinki", iso: "fi", region: "Escandinàvia" },
+            "France": { num: 18, display: "França", capital: "París", iso: "fr", region: "Europa Occidental" },
+            "Georgia": { num: 19, display: "Geòrgia", capital: "Tbilisi", iso: "ge", region: "Caucas" },
+            "United Kingdom": { num: 20, display: "Regne Unit", capital: "Londres", iso: "gb", region: "Europa Occidental" },
+            "Greece": { num: 21, display: "Grècia", capital: "Atenes", iso: "gr", region: "Europa del Sud" },
+            "Hungary": { num: 22, display: "Hongria", capital: "Budapest", iso: "hu", region: "Europa Central" },
+            "Ireland": { num: 23, display: "Irlanda", capital: "Dublín", iso: "ie", region: "Europa Occidental" },
+            "Iceland": { num: 24, display: "Islàndia", capital: "Reykjavík", iso: "is", region: "Escandinàvia" },
+            "Italy": { num: 25, display: "Itàlia", capital: "Roma", iso: "it", region: "Europa del Sud" },
+            "Kazakhstan": { num: 26, display: "Kazakhstan", capital: "Astanà", iso: "kz", region: "Europa Oriental" },
+            "Latvia": { num: 27, display: "Letònia", capital: "Riga", iso: "lv", region: "Bàltics" },
+            "Liechtenstein": { num: 28, display: "Liechtenstein", capital: "Vaduz", iso: "li", region: "Europa Central" },
+            "Lithuania": { num: 29, display: "Lituània", capital: "Vílnius", iso: "lt", region: "Bàltics" },
+            "Luxembourg": { num: 30, display: "Luxemburg", capital: "Luxemburg", iso: "lu", region: "Europa Occidental" },
+            "Macedonia": { num: 31, display: "Macedònia", capital: "Skopje", iso: "mk", region: "Balcans" },
+            "Malta": { num: 32, display: "Malta", capital: "La Valletta", iso: "mt", region: "Europa del Sud" },
+            "Moldova": { num: 33, display: "Moldàvia", capital: "Kixinau", iso: "md", region: "Europa Oriental" },
+            "Monaco": { num: 34, display: "Mònaco", capital: "Mònaco", iso: "mc", region: "Europa del Sud" },
+            "Montenegro": { num: 35, display: "Montenegro", capital: "Podgorica", iso: "me", region: "Balcans" },
+            "Norway": { num: 36, display: "Noruega", capital: "Oslo", iso: "no", region: "Escandinàvia" },
+            "Netherlands": { num: 37, display: "Països Baixos", capital: "Amsterdam", iso: "nl", region: "Europa Occidental" },
+            "Poland": { num: 38, display: "Polònia", capital: "Varsòvia", iso: "pl", region: "Europa Central" },
+            "Portugal": { num: 39, display: "Portugal", capital: "Lisboa", iso: "pt", region: "Europa del Sud" },
+            "Romania": { num: 40, display: "Romania", capital: "Bucarest", iso: "ro", region: "Balcans" },
+            "Russia": { num: 41, display: "Rússia", capital: "Moscou", iso: "ru", region: "Europa Oriental" },
+            "Czech Rep.": { num: 42, display: "República Txeca", capital: "Praga", iso: "cz", region: "Europa Central" },
+            "San Marino": { num: 43, display: "San Marino", capital: "San Marino", iso: "sm", region: "Europa del Sud" },
+            "Serbia": { num: 44, display: "Sèrbia", capital: "Belgrad", iso: "rs", region: "Balcans" },
+            "Sweden": { num: 45, display: "Suècia", capital: "Estocolm", iso: "se", region: "Escandinàvia" },
+            "Switzerland": { num: 46, display: "Suïssa", capital: "Berna", iso: "ch", region: "Europa Central" },
+            "Turkey": { num: 47, display: "Turquia", capital: "Ankara", iso: "tr", region: "Europa del Sud" },
+            "Ukraine": { num: 48, display: "Ucraïna", capital: "Kíiv", iso: "ua", region: "Europa Oriental" },
+            "Vatican": { num: 49, display: "Vaticà", capital: "Ciutat del Vaticà", iso: "va", region: "Europa del Sud" },
+            "Cyprus": { num: 50, display: "Xipre", capital: "Nicòsia", iso: "cy", region: "Europa del Sud" }
+        };
+
+        const SoundEngine = {
+            ctx: null,
+            init() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); },
+            playPop() { this.init(); const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain(); osc.type = 'sine'; osc.frequency.setValueAtTime(400, this.ctx.currentTime); gain.gain.setValueAtTime(0.1, this.ctx.currentTime); osc.connect(gain); gain.connect(this.ctx.destination); osc.start(); osc.stop(this.ctx.currentTime + 0.1); },
+            playSuccess() { this.init(); const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain(); osc.type = 'triangle'; osc.frequency.setValueAtTime(800, this.ctx.currentTime); gain.gain.setValueAtTime(0.1, this.ctx.currentTime); osc.connect(gain); gain.connect(this.ctx.destination); osc.start(); osc.stop(this.ctx.currentTime + 0.2); },
+            playFanfare() { this.init(); [523.25, 659.25, 783.99, 1046.50].forEach((f, i) => { const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain(); osc.type = 'sine'; osc.frequency.setValueAtTime(f, this.ctx.currentTime + (i * 0.1)); gain.gain.setValueAtTime(0.1, this.ctx.currentTime + (i * 0.1)); osc.connect(gain); gain.connect(this.ctx.destination); osc.start(this.ctx.currentTime + (i * 0.1)); osc.stop(this.ctx.currentTime + 1.5); }); }
+        };
+
+        const sanitizeId = (str) => {
+            return str.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '').toLowerCase();
+        };
+
+        const App = () => {
+            const [loading, setLoading] = useState(true);
+            const [score, setScore] = useState(0);
+            const [pieces, setPieces] = useState([]);
+            const [solved, setSolved] = useState(new Set());
+            const [victory, setVictory] = useState(false);
+            const [difficulty, setDifficulty] = useState('facil');
+            const [draggingId, setDraggingId] = useState(null);
+            const [studentName, setStudentName] = useState("");
+            const [showDiploma, setShowDiploma] = useState(false);
+            
+            const svgRef = useRef(null);
+            const mapGroupRef = useRef(null);
+            const zoomRef = useRef(null);
+            const pathRef = useRef(null);
+
+            useEffect(() => {
+                const init = async () => {
+                    try {
+                        const response = await fetch('https://raw.githubusercontent.com/leakyMirror/map-of-europe/master/TopoJSON/europe.topojson');
+                        const topology = await response.json();
+                        const geojson = topojson.feature(topology, topology.objects.europe);
+                        
+                        const sorted = Object.keys(PAISES_FICHA)
+                            .sort((a, b) => PAISES_FICHA[a].num - PAISES_FICHA[b].num)
+                            .map(key => ({ ...PAISES_FICHA[key], techName: key }));
+
+                        setPieces(sorted);
+                        setTimeout(() => renderMap(geojson), 100);
+                        setLoading(false);
+                    } catch (err) { alert("Error carregant el mapa."); }
+                };
+                init();
+            }, []);
+
+            const renderMap = (fullGeojson) => {
+                if (!svgRef.current) return;
+                const width = svgRef.current.clientWidth;
+                const height = svgRef.current.clientHeight;
+                const svg = d3.select(svgRef.current);
+                svg.selectAll("*").remove();
+                const g = svg.append("g");
+                mapGroupRef.current = g;
+
+                const zoomBehavior = d3.zoom().scaleExtent([1, 20]).on("zoom", (e) => g.attr("transform", e.transform));
+                svg.call(zoomBehavior);
+                zoomRef.current = zoomBehavior;
+
+                const projection = d3.geoMercator().fitSize([width * 0.95, height * 0.9], fullGeojson);
+                pathRef.current = d3.geoPath().projection(projection);
+
+                g.selectAll(".country-shape")
+                    .data(fullGeojson.features)
+                    .enter()
+                    .append("path")
+                    .attr("d", pathRef.current)
+                    .attr("id", d => `target-${sanitizeId(d.properties.NAME || d.properties.name)}`)
+                    .attr("fill", d => {
+                        const data = PAISES_FICHA[d.properties.NAME || d.properties.name];
+                        return data ? REGIONES_COLORS[data.region] : "#e2e8f0";
+                    })
+                    .attr("stroke", "#fff")
+                    .attr("stroke-width", "0.3")
+                    .attr("class", "country-target cursor-move")
+                    .on("dragover", (e) => e.preventDefault())
+                    .on("drop", function(e, d) {
+                        e.preventDefault();
+                        const droppedName = e.dataTransfer.getData("text/plain");
+                        const targetName = d.properties.NAME || d.properties.name;
+                        if (droppedName === targetName) handleCorrectDrop(d, d3.select(this));
+                        else {
+                            d3.select(this).attr("fill", "#fca5a5");
+                            setTimeout(() => {
+                                const data = PAISES_FICHA[targetName];
+                                if (data && !solved.has(targetName)) d3.select(this).attr("fill", REGIONES_COLORS[data.region]);
+                                else if (!data) d3.select(this).attr("fill", "#e2e8f0");
+                            }, 500);
+                        }
+                        setDraggingId(null);
+                    });
+
+                // Suport per a microestats
+                ["Vatican", "Malta", "Monaco", "San Marino", "Liechtenstein", "Andorra"].forEach(ms => {
+                    const feature = fullGeojson.features.find(f => (f.properties.NAME || f.properties.name) === ms);
+                    if (feature) {
+                        const centroid = pathRef.current.centroid(feature);
+                        if (!isNaN(centroid[0])) {
+                            g.append("circle")
+                                .attr("cx", centroid[0])
+                                .attr("cy", centroid[1])
+                                .attr("r", 2.5)
+                                .attr("fill", "rgba(0,0,0,0.05)")
+                                .on("dragover", (e) => e.preventDefault())
+                                .on("drop", (e) => {
+                                    e.preventDefault();
+                                    const droppedName = e.dataTransfer.getData("text/plain");
+                                    if (droppedName === ms) {
+                                        const shape = g.selectAll("path").filter(d => (d.properties.NAME || d.properties.name) === ms);
+                                        handleCorrectDrop(feature, shape);
+                                    }
+                                    setDraggingId(null);
+                                });
+                        }
+                    }
+                });
+            };
+
+            const handleCorrectDrop = (feature, pathElement) => {
+                const name = feature.properties.NAME || feature.properties.name;
+                const data = PAISES_FICHA[name];
+                if (!data || solved.has(name)) return;
+                SoundEngine.playSuccess();
+                setSolved(prev => new Set(prev).add(name));
+                setScore(s => s + 1);
+                pathElement.transition().duration(400).attr("fill", "#2563eb").attr("stroke", "#1e3a8a").attr("stroke-width", "0.8");
+                const centroid = pathRef.current.centroid(feature);
+                if (!isNaN(centroid[0])) {
+                    const group = mapGroupRef.current.append("g").attr("class", "pointer-events-none");
+                    group.append("text").attr("x", centroid[0]).attr("y", centroid[1] - 1.5).attr("text-anchor", "middle").attr("class", "text-[8px] fill-white font-black").style("text-shadow", "0 1px 2px black").text(data.num);
+                }
+            };
+
+            const handleZoom = (type) => {
+                if (!zoomRef.current || !svgRef.current) return;
+                const svg = d3.select(svgRef.current);
+                if (type === 'in') svg.transition().duration(300).call(zoomRef.current.scaleBy, 1.8);
+                else if (type === 'out') svg.transition().duration(300).call(zoomRef.current.scaleBy, 0.5);
+                else svg.transition().duration(500).call(zoomRef.current.transform, d3.zoomIdentity);
+            };
+
+            useEffect(() => { if (score === 50) { setVictory(true); SoundEngine.playFanfare(); } }, [score]);
+
+            useEffect(() => {
+                d3.selectAll(".country-target").classed("guide-glow", false);
+                if (draggingId) {
+                    const selector = `#target-${sanitizeId(draggingId)}`;
+                    try {
+                        const target = d3.select(selector);
+                        if (!target.empty()) target.classed("guide-glow", true);
+                    } catch(e) {}
+                }
+            }, [draggingId]);
+
+            const onDragStart = (e, techName) => {
+                SoundEngine.init();
+                SoundEngine.playPop();
+                setDraggingId(techName);
+                e.dataTransfer.setData("text/plain", techName);
+            };
+
+            return (
+                <div className="flex h-screen w-full bg-slate-50 overflow-hidden relative">
+                    {loading && (
+                        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-white">
+                            <div className="w-12 h-12 border-4 border-lime-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                            <p className="text-slate-800 font-black uppercase tracking-tighter italic">Aula Kids: Preparant el Mapa...</p>
+                        </div>
+                    )}
+
+                    <div className="flex-grow flex flex-col relative">
+                        <div className="absolute top-0 left-0 h-1.5 bg-lime-400 z-50 transition-all duration-500 shadow-[0_0_10px_rgba(163,230,53,0.5)]" style={{ width: `${(score/50)*100}%` }}></div>
+
+                        <header className="p-4 bg-white border-b border-slate-200 flex justify-between items-center z-10 shadow-sm">
+                            <div className="flex items-center gap-4">
+                                <div className="bg-sky-600 text-white p-2.5 rounded-xl shadow-lg transform -rotate-3 font-black text-xs">AK</div>
+                                <div>
+                                    <h1 className="text-2xl font-black text-lime-500 tracking-tighter uppercase leading-none drop-shadow-sm italic">Aula Kids <span className="text-sky-600 font-bold not-italic">Puzzle Europa</span></h1>
+                                    <div className="flex gap-2 mt-2">
+                                        <button onClick={() => setDifficulty('facil')} className={`px-4 py-1 rounded-full text-[10px] font-black uppercase transition-all ${difficulty === 'facil' ? 'bg-sky-600 text-white shadow-md' : 'bg-slate-100 text-slate-400'}`}>Fàcil</button>
+                                        <button onClick={() => setDifficulty('dificil')} className={`px-4 py-1 rounded-full text-[10px] font-black uppercase transition-all ${difficulty === 'dificil' ? 'bg-red-600 text-white shadow-md' : 'bg-slate-100 text-slate-400'}`}>Difícil</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <button onClick={() => window.location.reload()} className="bg-slate-50 hover:bg-slate-100 text-slate-400 p-2 rounded-lg transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg></button>
+                                <div className="bg-sky-600 text-white px-4 py-2 rounded-xl shadow-xl border-b-2 border-sky-800 min-w-[100px] text-center">
+                                    <span className="text-3xl font-mono font-black leading-none">{score} <small className="text-[10px] opacity-60">/ 50</small></span>
+                                </div>
+                            </div>
+                        </header>
+                        
+                        <main className="flex-grow relative flex items-center justify-center bg-white/60 backdrop-blur-sm overflow-hidden">
+                            <div className="absolute bottom-8 left-8 flex flex-col gap-2 z-30">
+                                <button onClick={() => handleZoom('in')} className="w-12 h-12 bg-white hover:bg-slate-50 text-slate-800 font-black text-2xl rounded-xl shadow-xl border-2 border-slate-200 flex items-center justify-center">+</button>
+                                <button onClick={() => handleZoom('out')} className="w-12 h-12 bg-white hover:bg-slate-50 text-slate-800 font-black text-2xl rounded-xl shadow-xl border-2 border-slate-200 flex items-center justify-center">-</button>
+                                <button onClick={() => handleZoom('reset')} className="w-12 h-12 bg-sky-600 hover:bg-sky-700 text-white font-black text-[10px] rounded-xl shadow-xl flex items-center justify-center uppercase tracking-tighter">Fix</button>
+                            </div>
+                            <svg ref={svgRef} className="w-full h-full drop-shadow-2xl" />
+                        </main>
+
+                        {victory && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-sky-900/60 backdrop-blur-xl z-[90]">
+                                {!showDiploma ? (
+                                    <div className="bg-white p-12 rounded-[2.5rem] text-center border-8 border-lime-400 shadow-2xl certificate-appear max-w-lg">
+                                        <div className="text-7xl mb-4">🎖️</div>
+                                        <h2 className="text-5xl font-black text-sky-900 mb-2 italic">EXCEL·LENT!</h2>
+                                        <p className="text-xl text-slate-600 mb-8 font-bold">Has demostrat ser un expert en Europa.</p>
+                                        <div className="mb-6 text-left">
+                                            <label className="block text-[10px] font-black text-sky-700 uppercase mb-2">Escriu el teu nom per al diploma:</label>
+                                            <input 
+                                                type="text" 
+                                                className="w-full p-4 border-2 border-sky-100 rounded-2xl text-center font-bold text-xl focus:outline-none focus:border-lime-400"
+                                                placeholder="EL TEU NOM"
+                                                value={studentName}
+                                                onChange={(e) => setStudentName(e.target.value)}
+                                            />
+                                        </div>
+                                        <div className="flex gap-3">
+                                            <button onClick={() => setShowDiploma(true)} disabled={!studentName} className="flex-1 bg-lime-500 hover:bg-lime-600 text-white px-8 py-4 rounded-2xl font-black text-xl shadow-xl transition-all disabled:opacity-50 uppercase tracking-widest">Diploma</button>
+                                            <button onClick={() => window.location.reload()} className="flex-1 bg-sky-600 hover:bg-sky-700 text-white px-8 py-4 rounded-2xl font-black text-xl shadow-xl transition-all uppercase tracking-widest">Repetir</button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="bg-white p-1 rounded-sm shadow-[0_20px_50px_rgba(0,0,0,0.3)] certificate-appear mx-4">
+                                        <div className="bg-white p-6 md:p-12 border-[15px] md:border-[20px] border-double border-sky-800 text-center relative overflow-hidden max-w-3xl">
+                                            <div className="absolute top-[-20px] right-[-20px] w-40 h-40 bg-sky-50 rounded-full flex items-center justify-center opacity-30 rotate-12">
+                                                <span className="text-sky-800 font-black text-6xl">AK</span>
+                                            </div>
+                                            <h4 className="text-sky-800 text-xs md:text-sm font-black uppercase tracking-widest mb-4 italic">Certificat de Mèrit Acadèmic</h4>
+                                            <h1 className="text-2xl md:text-4xl font-black text-slate-800 mb-2 uppercase tracking-tighter">Expert en Geografia d'Europa</h1>
+                                            <p className="text-slate-500 font-bold mb-6 italic text-sm">Es concedeix aquest títol a:</p>
+                                            <div className="diploma-font text-5xl md:text-7xl text-sky-700 mb-6 border-b-4 border-sky-100 pb-2 px-10 inline-block">{studentName || 'Campió/na'}</div>
+                                            <p className="text-slate-600 font-medium max-w-md mx-auto text-xs md:text-sm">Per haver situat correctament els 50 països i capitals de la Fitxa 2 amb èxit total.</p>
+                                            <div className="mt-8 md:mt-12 flex justify-between items-end px-4 md:px-10">
+                                                <div className="text-left">
+                                                    <div className="w-24 md:w-32 h-px bg-slate-300 mb-2"></div>
+                                                    <span className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase">Director Aula Kids</span>
+                                                </div>
+                                                <div className="w-16 h-16 md:w-24 md:h-24 bg-sky-100 rounded-full flex items-center justify-center border-4 border-sky-200">
+                                                    <span className="text-sky-600 font-black text-[10px] md:text-base">Aula Kids</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <button onClick={() => setShowDiploma(false)} className="w-full bg-slate-800 text-white py-4 font-black uppercase text-sm tracking-widest">Tornar al menú principal</button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    <aside className="w-80 md:w-[420px] bg-white border-l border-slate-200 shadow-2xl flex flex-col z-20">
+                        <div className="p-5 bg-slate-50 border-b border-slate-200">
+                            <h2 className="font-black text-sky-700 text-sm flex items-center gap-2 uppercase tracking-tighter">Banc de Països (1-50)</h2>
+                            <p className="text-[10px] text-slate-400 font-bold mt-1 uppercase tracking-tighter">
+                                {difficulty === 'facil' ? 'Mode Fàcil: Nom visible' : 'Mode Difícil: Identifica la capital'}
+                            </p>
+                        </div>
+                        
+                        <div className="flex-grow overflow-y-auto p-4 space-y-3 bg-slate-50/30 custom-scrollbar">
+                            {pieces.map((p) => {
+                                const isS = solved.has(p.techName);
+                                return (
+                                    <div key={p.techName} draggable={!isS} onDragStart={(e) => onDragStart(e, p.techName)} onDragEnd={() => setDraggingId(null)}
+                                        className={`flex items-center gap-4 p-3.5 rounded-2xl border-2 transition-all cursor-grab active:cursor-grabbing ${isS ? "bg-blue-50 border-blue-100 opacity-60" : "bg-white border-slate-100 hover:border-sky-500 hover:shadow-xl hover:-translate-y-0.5"}`}>
+                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg ${isS ? "bg-sky-600 text-white" : "bg-slate-100 text-slate-600"}`}>{p.num}</div>
+                                        <div className="flex-grow min-w-0">
+                                            <div className="font-black text-sm truncate uppercase text-slate-800 flex items-center gap-2">
+                                                <span>{isS || difficulty === 'facil' ? p.display : '??????'}</span>
+                                                <img src={`https://flagcdn.com/w40/${p.iso}.png`} width="22" className="rounded-sm border border-slate-100 shadow-sm" />
+                                            </div>
+                                            <div className={`text-[10px] font-bold ${difficulty === 'dificil' && !isS ? 'text-red-500 text-xs' : 'text-sky-500'} uppercase leading-none mt-1`}>{p.capital}</div>
+                                            <div className="text-[8px] text-slate-300 mt-1.5 uppercase font-black flex items-center gap-1">
+                                                <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: REGIONES_COLORS[p.region] }}></div>
+                                                {p.region}
+                                            </div>
+                                        </div>
+                                        {isS && <div className="text-lime-500 font-black text-xl animate-bounce">✓</div>}
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        <div className="p-4 bg-sky-600 text-white border-t border-sky-700 shadow-[0_-4px_10px_rgba(0,0,0,0.1)]">
+                            <div className="flex items-center gap-3 mb-2">
+                                <div className="w-9 h-9 bg-white rounded-full flex items-center justify-center text-sky-600 font-black text-xs shadow-md">AK</div>
+                                <div><h3 className="text-sm font-black uppercase tracking-tight">Aula Kids</h3><p className="text-[9px] opacity-80 uppercase font-bold">Material Educatiu Digital</p></div>
+                            </div>
+                            <div className="grid grid-cols-1 gap-1 text-[9px] font-bold opacity-90 italic">
+                                <div>📧 aulakids513@gmail.com</div>
+                                <div>📞 602 02 61 19</div>
+                            </div>
+                        </div>
+                    </aside>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
